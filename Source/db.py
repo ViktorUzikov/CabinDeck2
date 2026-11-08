@@ -170,5 +170,33 @@ class Database:
     def decrease_food_by_name(self, name: str):
         return self._run('UPDATE food_items SET quantity = quantity - 1 WHERE name = ?', (name,))
 
+    def add_comment(self, passenger_id: int, comment: str, importance: bool):
+        return self._run('INSERT INTO comments (passenger_id, text, type) VALUES (?, ?, ?)',
+                         (passenger_id, comment, 'note' if not importance else 'warning'))
+
+    def get_comments(self, passenger_id: int):
+        return self._all('SELECT * FROM comments WHERE passenger_id = ?', (passenger_id,))
+
+    def change_comment(self, comment_id: int, comment: str, importance: bool):
+        fields = {
+            'text': comment,
+            'type': 'note' if not importance else 'warning',
+        }
+
+        updates = {col: val for col, val in fields.items() if val != 'None'}
+
+        if not updates:
+            return 0
+
+        set_updates = ', '.join(f'{col} = ?' for col in updates)
+
+        return self._run(
+            f'UPDATE comments SET {set_updates} WHERE id = ?',
+            (*updates.values(), comment_id),
+        ).rowcount
+
+    def get_comment(self, comment_id: int):
+        return self.db.execute('SELECT text, type FROM comments WHERE id = ?', (comment_id,)).fetchone()
+
     def close(self):
         self.db.close()

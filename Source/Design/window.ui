@@ -6,7 +6,7 @@
    <rect>
     <x>0</x>
     <y>0</y>
-    <width>1283</width>
+    <width>1272</width>
     <height>601</height>
    </rect>
   </property>
@@ -17,14 +17,14 @@
    <widget class="QTabWidget" name="tabWidget">
     <property name="geometry">
      <rect>
-      <x>-10</x>
+      <x>0</x>
       <y>60</y>
       <width>811</width>
       <height>501</height>
      </rect>
     </property>
     <property name="currentIndex">
-     <number>2</number>
+     <number>0</number>
     </property>
     <property name="tabsClosable">
      <bool>false</bool>
@@ -42,9 +42,9 @@
      <widget class="QWidget" name="gridLayoutWidget">
       <property name="geometry">
        <rect>
-        <x>10</x>
+        <x>0</x>
         <y>-1</y>
-        <width>291</width>
+        <width>301</width>
         <height>471</height>
        </rect>
       </property>
@@ -193,7 +193,7 @@
        <string>Добавить</string>
       </property>
      </widget>
-     <widget class="QWidget" name="verticalLayoutWidget">
+     <widget class="QListView" name="comments">
       <property name="geometry">
        <rect>
         <x>320</x>
@@ -202,7 +202,6 @@
         <height>211</height>
        </rect>
       </property>
-      <layout class="QVBoxLayout" name="comments"/>
      </widget>
     </widget>
     <widget class="QWidget" name="passengers_tab">
@@ -212,9 +211,9 @@
      <widget class="QWidget" name="verticalLayoutWidget_2">
       <property name="geometry">
        <rect>
-        <x>10</x>
+        <x>0</x>
         <y>0</y>
-        <width>291</width>
+        <width>301</width>
         <height>471</height>
        </rect>
       </property>
@@ -354,17 +353,6 @@
        <string>Место 0</string>
       </property>
      </widget>
-     <widget class="QWidget" name="verticalLayoutWidget_3">
-      <property name="geometry">
-       <rect>
-        <x>320</x>
-        <y>250</y>
-        <width>461</width>
-        <height>211</height>
-       </rect>
-      </property>
-      <layout class="QVBoxLayout" name="comments_in_passengers"/>
-     </widget>
      <widget class="QLabel" name="name_label_in_passengers">
       <property name="geometry">
        <rect>
@@ -391,6 +379,16 @@
        <string>Добавить</string>
       </property>
      </widget>
+     <widget class="QListView" name="comments_in_passengers">
+      <property name="geometry">
+       <rect>
+        <x>320</x>
+        <y>250</y>
+        <width>461</width>
+        <height>211</height>
+       </rect>
+      </property>
+     </widget>
     </widget>
     <widget class="QWidget" name="food_tab">
      <attribute name="title">
@@ -399,9 +397,9 @@
      <widget class="QListView" name="food_list">
       <property name="geometry">
        <rect>
-        <x>10</x>
+        <x>0</x>
         <y>0</y>
-        <width>291</width>
+        <width>301</width>
         <height>471</height>
        </rect>
       </property>
@@ -543,7 +541,7 @@
     <rect>
      <x>0</x>
      <y>0</y>
-     <width>1283</width>
+     <width>1272</width>
      <height>22</height>
     </rect>
    </property>

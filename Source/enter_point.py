@@ -5,6 +5,7 @@ from .interface import Ui_MainWindow
 from .flight_dialog_interface import Ui_Dialog as FlightDialogUI
 from .passenger_dialog_interface import Ui_Dialog as PassengerDialogUI
 from .food_dialog_interface import Ui_Dialog as FoodDialogUI
+from .comment_dialog_interface import Ui_Dialog as CommentDialogUI
 import sys
 from .db import Database
 from .local_model import load_model, is_loaded, StreamWorker
@@ -205,6 +206,46 @@ class FoodDialog(QDialog, FoodDialogUI):
         return self.name.text().strip(), int(self.count.value())
 
 
+class CommentDialog(QDialog, CommentDialogUI):
+    def __init__(self, parent=None, importance=False, text=''):
+        super().__init__(parent)
+
+        self.setupUi(self)
+
+        self.setWindowTitle("Новое комментарий")
+
+        self.importantCheckBox.setChecked(importance)
+
+        self.commentEdit.setText(text)
+
+        self.default_key_press = self.commentEdit.keyPressEvent
+
+        self.commentEdit.keyPressEvent = self.new_key_press
+
+        self.buttonBox.button(QDialogButtonBox.StandardButton.Ok).setText('Добавить')
+        self.buttonBox.button(QDialogButtonBox.StandardButton.Cancel).setText('Отменить')
+
+    def new_key_press(self, event):
+        is_enter = event.key() in (Qt.Key.Key_Enter, Qt.Key.Key_Return)
+        is_shift = event.modifiers() & Qt.KeyboardModifier.ShiftModifier
+
+        if is_enter and not is_shift:
+            self.accept()
+        else:
+            self.default_key_press(event)
+
+    def accept(self):
+        if not self.commentEdit.toPlainText().strip():
+            QMessageBox.warning(self, 'Ошибка', 'Заполните все поля')
+
+            return
+
+        super().accept()
+
+    def get_data(self):
+        return self.commentEdit.toPlainText().strip(), self.importantCheckBox.isChecked()
+
+
 class Window(QMainWindow, Ui_MainWindow):
     def __init__(self):
         super().__init__()
@@ -230,6 +271,10 @@ class Window(QMainWindow, Ui_MainWindow):
         self.new_photo.clicked.connect(self.new_photo_callback)
         self.food_count.editingFinished.connect(self.on_food_changed)
         self.food_name.editingFinished.connect(self.on_food_changed)
+        self.add_comment_in_passengers.clicked.connect(self.on_comment_adding)
+        self.add_comment.clicked.connect(self.on_comment_adding)
+        self.comments_in_passengers.doubleClicked.connect(self.on_comment_clicked)
+        self.comments.doubleClicked.connect(self.on_comment_clicked)
 
         self.flight_choice.currentIndexChanged.connect(self.on_flight_changed)
 
@@ -244,6 +289,11 @@ class Window(QMainWindow, Ui_MainWindow):
         self.food_model = QStandardItemModel()
 
         self.food_list.setModel(self.food_model)
+
+        self.comment_model = QStandardItemModel()
+
+        self.comments_in_passengers.setModel(self.comment_model)
+        self.comments.setModel(self.comment_model)
 
         self.current_flight_id = -1
         self.current_passenger_in_list = -1
@@ -263,7 +313,8 @@ class Window(QMainWindow, Ui_MainWindow):
 
         self.loading_model_thread.start()
 
-        self.modelAnswer.setHtml('<h3>                         Модель загружается</h3>')
+        self.modelAnswer.setHtml(
+            '<h3>                         Модель загружается, первый запуск может занять время и интернет</h3>')
 
     def set_ready_for_asking(self):
         self.modelAnswer.setHtml('<h3>                         Спросите свой, <b>любой</b> вопрос</h3>')
@@ -329,11 +380,10 @@ class Window(QMainWindow, Ui_MainWindow):
         self.render_chat()
 
     def on_worker_finished(self):
-        worker = self.worker
+        worker = self.sender()
 
-        self.worker = None
-
-        worker.wait()
+        if worker is self.worker:
+            self.worker = None
 
         worker.deleteLater()
 
@@ -485,8 +535,23 @@ class Window(QMainWindow, Ui_MainWindow):
         for food in self.db.get_foods(self.current_flight_id):
             self.add_food_item(food[0], food[2])
 
+    def load_comments(self):
+        self.comment_model.clear()
+
+        if self.current_flight_id == -1 or self.current_passenger_in_list == -1:
+            return
+
+        for comment in self.db.get_comments(self.current_passenger_in_list):
+            item = QStandardItem(comment[3])
+            item.setData(comment[0], Qt.ItemDataRole.UserRole)
+            item.setEditable(False)
+
+            self.comment_model.appendRow(item)
+
     def on_passenger_selected(self, index):
         self.refresh_passenger(index.data(Qt.ItemDataRole.UserRole))
+
+        self.load_comments()
 
     def on_food_selected(self, index):
         self.current_food_in_list = index.data(Qt.ItemDataRole.UserRole)
@@ -495,6 +560,15 @@ class Window(QMainWindow, Ui_MainWindow):
 
         self.food_name.setText(name)
         self.food_count.setValue(quantity)
+
+    def on_comment_clicked(self, index):
+        comment_id = index.data(Qt.ItemDataRole.UserRole)
+
+        name, importance = self.db.get_comment(comment_id)
+
+        importance = True if importance == 'warning' else False
+
+        self.on_comment_adding(importance, name, comment_id)
 
     def clear_labels(self):
         self.current_passenger_in_list = -1
@@ -566,6 +640,34 @@ class Window(QMainWindow, Ui_MainWindow):
             self.food_list.setCurrentIndex(index)
 
             self.on_food_selected(index)
+
+    def on_comment_adding(self, important=False, text='', comment_id=None):
+        dialog = CommentDialog(self, important, text)
+
+        if dialog.exec() == QDialog.DialogCode.Accepted:
+            if self.current_flight_id == -1:
+                QMessageBox.warning(self, 'Ошибка', 'Нету рейсов')
+
+                return
+
+            if self.current_passenger_in_list == -1:
+                QMessageBox.warning(self, 'Ошибка', 'Не выбран пассажир')
+
+                return
+
+            comment, important = dialog.get_data()
+
+            if not comment:
+                QMessageBox.warning(self, 'Ошибка', 'Комментарий не может быть пустым')
+
+                return
+
+            if comment_id is not None:
+                self.db.change_comment(comment_id, comment, important)
+            else:
+                self.db.add_comment(self.current_passenger_in_list, comment, important)
+
+            self.load_comments()
 
     def on_food_changed(self):
         if self.current_food_in_list == -1:

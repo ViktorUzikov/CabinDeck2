@@ -17,7 +17,7 @@ TOOLS = [
     {'type': 'function',
      'function': {
          'name': 'get_flights',
-         'description': 'Get all flight. Return list with params for every flight in list: id, number, departure, arrival, datetime',
+         'description': 'Retrieve all flights from the database. Return list with params for every flight in list: id, number, departure, arrival, datetime',
          'parameters': {
              'type': 'object',
              'properties': {},
@@ -95,9 +95,13 @@ class StreamWorker(QThread):
         if llm is None:
             self.error.emit('Модель не загружена')
 
+            # return
+
         worker_db = Database('database.db')
 
         known_flights = set()
+
+        stream = None
 
         messages = ([{'role': 'system', 'content': SYSTEM_PROMPT}]
                     + history
@@ -114,18 +118,29 @@ class StreamWorker(QThread):
                 response = llm.create_chat_completion(
                     messages=messages,
                     tools=TOOLS,
-                    tool_choice={'type': 'function', 'function': {'name': 'get_flights'}},
+                    tool_choice='auto',
+                    # {'type': 'function', 'function': {'name': 'get_flights'}}
                     max_tokens=1024,
                     temperature=0.3,
                     stream=False
                 )
 
                 message = response['choices'][0]['message']
+
+                message['content'] = message.get('content', '') or ''
+
                 messages.append(message)
+
+                print('MESSAGE', message, flush=True)
+                print('FINISH REASON', response['choices'][0]['finish_reason'], flush=True)
 
                 calls = message.get('tool_calls') or []
 
+                print('CALLS', calls, flush=True)
+
                 if not calls:
+                    message = message['content'] or ''
+
                     break
 
                 for call in calls:
@@ -153,26 +168,42 @@ class StreamWorker(QThread):
             if self._stop:
                 return
 
-            stream = llm.create_chat_completion(messages, max_tokens=1024, temperature=0.3, stream=True)
+            if message:
+                self.chunk.emit(message)
 
-            for part in stream:
-                if self._stop:
-                    break
+                text = message
+            else:
+                print('STREAM START', flush=True)
 
-                piece = part['choices'][0]['delta'].get('content') or ''
+                stream = llm.create_chat_completion(messages, max_tokens=1024, temperature=0.3, stream=True)
 
-                if piece:
-                    text += piece
+                print('STREAM CREATED', flush=True)
 
-                    self.chunk.emit(piece)
+                for part in stream:
+                    if self._stop:
+                        break
 
-            stream.close()
+                    piece = part['choices'][0]['delta'].get('content') or ''
+
+                    # print(piece, flush=True)
+
+                    if piece:
+                        text += piece
+
+                        self.chunk.emit(piece)
+
+                stream.close()
+
+                stream = None
         except Exception as e:
             self.error.emit(str(e))
 
             return
         finally:
             worker_db.close()
+
+            if stream is not None:
+                stream.close()
 
         if self._stop:
             return
@@ -184,13 +215,16 @@ class StreamWorker(QThread):
 
         self.done.emit(text)
 
+        print('STREAM FINISHED', flush=True)
+
 
 def load_model():
     global llm
 
     model = hf_hub_download(
-        repo_id='confamnode/Ministral-3-3B-Instruct-2512-GGUF',
-        filename='Ministral-3-3B-Instruct-2512-Q4_K_M.gguf',
+        repo_id='confamnode/Ministral-3-8B-Instruct-2512-GGUF',
+        # For better experience use 8B, but on slow pc use 3B or for fastest work liquid 1.3B
+        filename='Ministral-3-8B-Instruct-2512-Q4_K_M.gguf',
         local_dir='./Source/Model',
     )
 
@@ -198,7 +232,15 @@ def load_model():
         model_path=model,
         n_ctx=4096,
         n_threads=6,
-        verbose=True,
+        n_gpu_layers=-1,
+        n_batch=512,
+        verbose=False,
+    )
+
+    llm.create_chat_completion(
+        messages=[{'role': 'user', 'content': 'Привет'}],
+        max_tokens=16,
+        temperature=0,
     )
 
 
@@ -207,6 +249,8 @@ def is_loaded() -> bool:
 
 
 def execute_tool(name, args, db, known_flights):
+    print('Executing tool', name)
+
     if name == 'get_flights':
         flights = db.get_flights()
 
